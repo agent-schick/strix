@@ -67,11 +67,14 @@ dev = [
   "pyinstaller>=6.17.0; python_version >= '3.12' and python_version < '3.15'",
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
+  "pytest-timeout>=2.3",
   "types-requests>=2.32",
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# A hung test fails in minutes instead of holding the CI job for its 6-hour limit.
+timeout = 300
 
 [build-system]
 requires = ["hatchling"]

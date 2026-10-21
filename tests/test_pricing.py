@@ -26,6 +26,28 @@ def test_resolves_common_bare_model_names() -> None:
     assert resolve_litellm_model("minimax/MiniMax-M3") == "minimax/MiniMax-M3"
 
 
+def test_resolver_never_picks_an_interactive_auth_provider() -> None:
+    # Pricing a github_copilot model makes LiteLLM start a device-code login
+    # and poll GitHub forever; the remote cost map gained such rows for bare
+    # names like claude-sonnet-4.6 in October 2026 and hung the whole suite.
+    resolve_litellm_model.cache_clear()
+    copilot_only = {
+        "github_copilot/claude-sonnet-4.6": {
+            "litellm_provider": "github_copilot",
+            "input_cost_per_token": 3e-06,
+            "output_cost_per_token": 1.5e-05,
+        },
+        "claude-opus-4.6": {"litellm_provider": "github_copilot"},
+    }
+    with patch.object(litellm, "model_cost", copilot_only):
+        assert resolve_litellm_model("claude-sonnet-4.6") is None
+        assert resolve_litellm_model("github_copilot/claude-sonnet-4.6") is None
+        assert resolve_litellm_model("claude-opus-4.6") is None
+    resolve_litellm_model.cache_clear()
+    resolved = resolve_litellm_model("claude-sonnet-4.6")
+    assert resolved is None or not resolved.startswith("github_copilot/")
+
+
 def test_resolver_returns_none_for_unresolvable_model() -> None:
     resolve_litellm_model.cache_clear()
     assert resolve_litellm_model("provider/not-a-real-model") is None

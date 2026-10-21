@@ -1213,6 +1213,7 @@ def _estimate_response_cost(kwargs: Any, completion_response: Any) -> float | No
             value = completion_cost(
                 completion_response={"model": resolved, "usage": usage_payload},
                 model=resolved,
+                custom_llm_provider=resolved.split("/", 1)[0] if "/" in resolved else None,
             )
         except Exception:  # nosec B112  # noqa: BLE001, S112
             continue
