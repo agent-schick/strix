@@ -231,4 +231,4 @@ Keep a compact set tuned per context:
 
 ## Summary
 
-Context, transformation order, and sink decide whether input becomes text, markup, or executable code. Prove HTML injection separately from XSS, and validate every render path.
+Context, transformation order, and sink decide whether input becomes text, markup, or executable code. Prove HTML injection separately from XSS, and validate every render path. Encode for the exact context and verify at runtime with CSP/Trusted Types. Small payloads with strong evidence beat payload catalogs.
