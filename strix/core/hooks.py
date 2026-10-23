@@ -220,7 +220,7 @@ class ReportUsageHooks(RunHooks[dict[str, Any]]):
         context.context[LLM_TURN_KEY] = int(context.context.get(LLM_TURN_KEY, 0)) + 1
         try:
             self._maybe_warn_turns(context, input_items)
-            self._maybe_warn_turn_limit(context, input_items)
+            self._maybe_warn_soft_turn_limit(context, input_items)
             self._maybe_warn_budget(context, input_items)
         except Exception:
             logger.exception("budget/turn warning injection failed")
@@ -284,7 +284,7 @@ class ReportUsageHooks(RunHooks[dict[str, Any]]):
         )
         input_items.append({"role": "user", "content": content})
 
-    def _maybe_warn_turn_limit(
+    def _maybe_warn_soft_turn_limit(
         self,
         context: RunContextWrapper[dict[str, Any]],
         input_items: list[TResponseInputItem],
