@@ -254,7 +254,7 @@ async def run_strix_scan(
     ``report_tool`` is the tool every agent files findings with, in place of
     ``create_vulnerability_report``.
     ``subagent_turn_limits`` maps a skill name to a soft turn limit for sub-agents
-    spawned with that skill (the smallest applies). Agents are warned 10 turns
+    spawned with that skill (the largest applies). Agents are warned 10 turns
     before it and reminded past it, but never stopped.
     """
 
