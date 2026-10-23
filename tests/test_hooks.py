@@ -534,3 +534,14 @@ async def test_no_turn_limit_no_notice() -> None:
         _make_warn_context(requests=14, parent_id="root-1"), MagicMock(), None, items
     )
     assert items == []
+
+
+@pytest.mark.asyncio
+async def test_hard_turn_warning_replaces_turn_limit_notice() -> None:
+    hooks = ReportUsageHooks(model="test-model", max_turns=50)
+    ctx = _make_warn_context(requests=34, parent_id="root-1")
+    ctx.context["turn_limit"] = 45
+    items: list[Any] = []
+    await hooks.on_llm_start(ctx, MagicMock(), None, items)
+    assert len(items) == 1
+    assert "Turn budget: 35/50" in items[0]["content"]
