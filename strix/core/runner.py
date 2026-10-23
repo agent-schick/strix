@@ -576,6 +576,7 @@ async def run_strix_scan(
             "scan_targets": build_scan_targets(scan_config),
             "max_context_images": settings.runtime.max_context_images,
             "supports_images": supports_images,
+            "coverage_tools": coverage_tools,
         }
 
         root_session = open_agent_session(root_id, agents_db)
