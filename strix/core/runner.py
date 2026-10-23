@@ -8,7 +8,7 @@ import io
 import json
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -36,7 +36,12 @@ from strix.core.execution import (
 from strix.core.execution import (
     spawn_child_agent as start_child_agent,
 )
-from strix.core.hooks import BudgetExceededError, ReportUsageHooks, recomputed_budget_flags
+from strix.core.hooks import (
+    SUBAGENT_TURN_LIMITS_KEY,
+    BudgetExceededError,
+    ReportUsageHooks,
+    recomputed_budget_flags,
+)
 from strix.core.inputs import (
     build_root_task,
     build_scan_targets,
@@ -225,6 +230,7 @@ async def run_strix_scan(
     root_finish_tool: Tool = finish_scan,
     report_tool: Tool = create_vulnerability_report,
     coverage_tools: bool = True,
+    subagent_turn_limits: Mapping[str, int] | None = None,
 ) -> RunResultBase | None:
     """Run or resume one Strix scan against a sandbox.
 
@@ -252,6 +258,9 @@ async def run_strix_scan(
     ``create_vulnerability_report``.
     ``coverage_tools=False`` drops the coverage ledger tools and their prompt
     rules from every agent.
+    ``subagent_turn_limits`` maps a skill name to a soft turn limit for sub-agents
+    spawned with that skill (the largest applies). Agents are warned 10 turns
+    before it and reminded past it, but never stopped.
     """
 
     def report(phase: str) -> None:
@@ -577,6 +586,7 @@ async def run_strix_scan(
             "max_context_images": settings.runtime.max_context_images,
             "supports_images": supports_images,
             "coverage_tools": coverage_tools,
+            SUBAGENT_TURN_LIMITS_KEY: dict(subagent_turn_limits or {}),
         }
 
         root_session = open_agent_session(root_id, agents_db)
