@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 from collections import Counter
 from collections.abc import Iterator
@@ -25,6 +26,10 @@ _SKILL_TEMPLATES = Environment(
 
 _INTERNAL_SKILL_CATEGORIES: frozenset[str] = frozenset({"scan_modes", "coordination", "analysis"})
 _ROOT_SKILL_CATEGORY = "root"
+
+# ``os.pathsep``-separated list of extra skill roots, read on every lookup so the
+# CLI can set it before the first prompt renders.
+SKILLS_DIR_ENV = "STRIX_SKILLS_DIR"
 
 _EXTRA_SKILL_DIRS: list[Path] = []
 _SKILL_METADATA_CACHE: dict[tuple[Path, int, int], dict[str, str]] = {}
@@ -55,9 +60,27 @@ def registered_skill_dirs() -> tuple[Path, ...]:
     return tuple(reversed(_EXTRA_SKILL_DIRS))
 
 
+def env_skill_dirs() -> tuple[Path, ...]:
+    """Skill roots named by ``STRIX_SKILLS_DIR``, in the order given."""
+    raw = os.environ.get(SKILLS_DIR_ENV, "")
+    dirs: list[Path] = []
+    for entry in raw.split(os.pathsep):
+        if not entry.strip():
+            continue
+        path = Path(entry.strip()).expanduser()
+        if path not in dirs:
+            dirs.append(path)
+    return tuple(dirs)
+
+
 def skill_search_dirs() -> tuple[Path, ...]:
-    """All existing skill roots, highest precedence first (built-in last)."""
+    """All existing skill roots, highest precedence first (built-in last).
+
+    Order: directories from :func:`register_skill_dir`, then the entries of
+    ``STRIX_SKILLS_DIR``, then the packaged skills.
+    """
     roots = [d for d in registered_skill_dirs() if d.is_dir()]
+    roots.extend(d for d in env_skill_dirs() if d.is_dir() and d not in roots)
     builtin = get_strix_resource_path("skills")
     if builtin.is_dir():
         roots.append(builtin)
@@ -221,13 +244,14 @@ def get_available_skills() -> dict[str, list[dict[str, str]]]:
     return grouped
 
 
-def validate_requested_skills(skill_list: list[str], max_skills: int = 5) -> str | None:
+def validate_requested_skills(skill_list: list[str], max_skills: int | None = 5) -> str | None:
     """Validate a list of user-passed skill names.
 
     Returns ``None`` on success, or a model-readable error message
     describing what was wrong (count exceeded, unknown names).
+    ``max_skills=None`` skips the count check.
     """
-    if len(skill_list) > max_skills:
+    if max_skills is not None and len(skill_list) > max_skills:
         return (
             f"Cannot specify more than {max_skills} skills per agent; "
             f"got {len(skill_list)}. Aim for 1-3 related skills per specialist."
