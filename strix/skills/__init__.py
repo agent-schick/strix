@@ -271,9 +271,9 @@ def _candidate_skill_files(skill_name: str) -> list[Path]:
 
 
 def skill_turn_limit(skill_names: list[str], turn_limits: Mapping[str, int]) -> int | None:
-    """Smallest of ``turn_limits`` (keyed by skill name) among these skills, if any."""
+    """Largest of ``turn_limits`` (keyed by skill name) among these skills, if any."""
     files = {path for name in skill_names for path in _candidate_skill_files(name)}
-    return min(
+    return max(
         (
             limit
             for name, limit in turn_limits.items()

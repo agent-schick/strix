@@ -293,6 +293,6 @@ def test_skill_turn_limit_matches_bare_and_qualified_names(tmp_path: Path) -> No
 
     assert skill_turn_limit(["investigator"], limits) == 25
     assert skill_turn_limit(["pr_review/validator", "idor"], limits) == 40
-    assert skill_turn_limit(["investigator", "validator"], limits) == 25
+    assert skill_turn_limit(["investigator", "validator"], limits) == 40
     assert skill_turn_limit(["idor"], limits) is None
     assert skill_turn_limit(["investigator"], {}) is None
