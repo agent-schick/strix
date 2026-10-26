@@ -181,9 +181,12 @@ def _compose_root_instructions_override(
     supports_images: bool,
     report_tool: str,
     coverage_tools: bool,
+    replace_scan_prompt: bool,
 ) -> str | None:
     if root_instructions_override is None:
         return None
+    if replace_scan_prompt:
+        return f"{root_instructions_override}\n\n{render_scope_prompt(system_prompt_context)}"
 
     base_instructions = render_system_prompt(
         skills=skills,
@@ -225,6 +228,7 @@ async def run_strix_scan(
     cleanup_on_exit: bool = True,
     event_sink: StreamEventSink | None = None,
     root_instructions_override: str | None = None,
+    replace_root_scan_prompt: bool = False,
     extra_system_prompt_context: dict[str, Any] | None = None,
     status_sink: StatusSink | None = None,
     mcp_connection_requests: list[McpConnectionRequest] | None = None,
@@ -238,6 +242,8 @@ async def run_strix_scan(
 
     ``root_instructions_override`` adds root scan instructions to the rendered
     root prompt without replacing the system-verified scope block.
+    ``replace_root_scan_prompt=True`` makes it the root's whole prompt, followed
+    by the scope, instead of adding it to the rendered scan prompt.
     ``extra_files`` entries (``{"workspace_path", "content"}``) are placed into
     the sandbox workspace at session bring-up; see
     :func:`strix.runtime.session_manager.create_or_reuse`.
@@ -521,6 +527,7 @@ async def run_strix_scan(
             supports_images=supports_images,
             report_tool=report_tool.name,
             coverage_tools=coverage_tools,
+            replace_scan_prompt=replace_root_scan_prompt,
         )
 
         root_agent = build_strix_agent(

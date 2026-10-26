@@ -68,6 +68,7 @@ def _patch_engine_scaffold(
             extra_body=None,
         ),
         runtime=types.SimpleNamespace(max_context_images=3),
+        telemetry=types.SimpleNamespace(run_record_timings=False),
     )
     monkeypatch.setattr(runner, "load_settings", lambda: settings)
     monkeypatch.setattr(runner, "configure_sdk_model_defaults", lambda _settings: None)
@@ -159,6 +160,36 @@ async def test_root_prompt_options_flow_into_root_agent(
         **scope_context,
         "target_context": "known findings",
     }
+
+
+@pytest.mark.asyncio
+async def test_replace_root_scan_prompt_drops_the_scan_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    scope_context = {
+        "scope_source": "user_scan_config",
+        "authorized_targets": [
+            {"type": "web_application", "value": "https://example.com", "workspace_path": ""},
+        ],
+    }
+    captured = _patch_engine_scaffold(monkeypatch, tmp_path, scope_context)
+
+    await runner.run_strix_scan(
+        scan_config={"targets": [], "scan_mode": "deep"},
+        scan_id="scan-replace",
+        image="img",
+        coordinator=AgentCoordinator(),
+        root_instructions_override="CUSTOM SCAN PROMPT",
+        replace_root_scan_prompt=True,
+    )
+
+    instructions_override = captured["kwargs"]["instructions_override"]
+    assert instructions_override.startswith("CUSTOM SCAN PROMPT")
+    assert instructions_override.count("SCOPE:") == 1
+    assert "https://example.com" in instructions_override
+    assert "<root_scan_instructions_override>" not in instructions_override
+    assert "application security validation agent" not in instructions_override
 
 
 @pytest.mark.asyncio
