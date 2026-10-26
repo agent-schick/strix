@@ -11,7 +11,7 @@ Set your model and API key:
 
 | Model                 | Provider                  | Configuration                    |
 | --------------------- | ------------------------- | -------------------------------- |
-| GLM-5.3 (recommended) | Vercel AI Gateway         | `openai/zai/glm-5.3`             |
+| GLM-5.3 (recommended) | Vercel AI Gateway         | `vercel_ai_gateway/zai/glm-5.3`  |
 | GLM-5.3 (recommended) | OpenRouter                | `openrouter/z-ai/glm-5.3`        |
 | GPT-6.1 Sol           | OpenAI                    | `openai/gpt-6.1-sol`             |
 | Claude Opus 5.5       | Anthropic                 | `anthropic/claude-opus-5-5`      |
@@ -27,9 +27,8 @@ Frontier OpenAI, Anthropic and Gemini models need a cyber access program for sec
 
 <CodeGroup>
 ```bash Vercel AI Gateway
-export STRIX_LLM="openai/zai/glm-5.3"
+export STRIX_LLM="vercel_ai_gateway/zai/glm-5.3"
 export LLM_API_KEY="your-api-key"
-export LLM_API_BASE="https://ai-gateway.vercel.sh/v1"
 ```
 
 ```bash OpenRouter
