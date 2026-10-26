@@ -181,7 +181,7 @@ def _compose_root_instructions_override(
     supports_images: bool,
     report_tool: str,
     coverage_tools: bool,
-    replace_scan_prompt: bool,
+    replace_scan_prompt: bool = False,
 ) -> str | None:
     if root_instructions_override is None:
         return None
