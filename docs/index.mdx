@@ -73,7 +73,21 @@ Strix uses a graph of specialized agents for comprehensive security testing:
 
 ## Quick Example
 
-```bash
+<CodeGroup>
+```bash Vercel AI Gateway
+# Install
+curl -sSL https://strix.ai/install | bash
+
+# Configure
+export STRIX_LLM="openai/zai/glm-5.3"
+export LLM_API_KEY="your-api-key"
+export LLM_API_BASE="https://ai-gateway.vercel.sh/v1"
+
+# Scan
+strix --target ./your-app
+```
+
+```bash OpenRouter
 # Install
 curl -sSL https://strix.ai/install | bash
 
@@ -84,6 +98,7 @@ export LLM_API_KEY="your-api-key"
 # Scan
 strix --target ./your-app
 ```
+</CodeGroup>
 
 ## Community
 
