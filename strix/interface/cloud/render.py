@@ -130,6 +130,8 @@ _DETAIL_PRIORITY_KEYS = (
     "finding_type",
     "cve",
     "cwe",
+    "attack_techniques",
+    "attack_source",
     "cvss",
     "filed_at",
     "target",

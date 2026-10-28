@@ -371,3 +371,10 @@ def test_calibration_metadata_survives_into_result_properties(tmp_path: Path) ->
     assert strix["confidence_rationale"] == "Reproduced once out of three attempts."
     assert strix["severity_change_conditions"] == "Critical if the WAF rule is removed."
     assert strix["fix_verification"] == "Not retested."
+
+
+def test_write_sarif_carries_attack_techniques(tmp_path: Path) -> None:
+    write_sarif(tmp_path, [_finding(attack_techniques=["T1190", "T1059"])])
+    result = _read(tmp_path)["runs"][0]["results"][0]
+
+    assert result["properties"]["strix"]["attack_techniques"] == ["T1190", "T1059"]

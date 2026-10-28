@@ -241,6 +241,7 @@ def render_vulnerability_md(report: dict[str, Any]) -> str:  # noqa: PLR0912, PL
         ("Method", report.get("method")),
         ("CVE", report.get("cve")),
         ("CWE", report.get("cwe")),
+        ("MITRE ATT&CK", ", ".join(report.get("attack_techniques") or [])),
     ]
     cvss = report.get("cvss")
     if cvss is not None:

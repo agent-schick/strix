@@ -2408,3 +2408,57 @@ async def test_delete_tool_carries_the_caller_identity(report_state: ReportState
     assert history[0]["agent_id"] == "aaaa1111"
     assert history[0]["agent_name"] == "Recon Agent"
     assert "update_vulnerability_report" in delete_vulnerability_report.description
+
+
+async def test_create_records_attack_techniques(report_state: ReportState) -> None:
+    result = await _do_create(
+        **_CONFIRMED_KWARGS,
+        attack_techniques=["t1190", "T1552.001 - Credentials In Files", "T1190"],
+    )
+
+    assert result["success"] is True
+    assert report_state.vulnerability_reports[0]["attack_techniques"] == ["T1190", "T1552.001"]
+
+
+async def test_create_rejects_unknown_attack_technique(report_state: ReportState) -> None:
+    result = await _do_create(**_CONFIRMED_KWARGS, attack_techniques=["T9999", "exploit"])
+
+    assert result["success"] is False
+    assert any("unknown ATT&CK technique: 'T9999'" in error for error in result["errors"])
+    assert any("invalid ATT&CK technique: 'exploit'" in error for error in result["errors"])
+    assert report_state.vulnerability_reports == []
+
+
+async def test_create_without_attack_techniques_omits_the_field(
+    report_state: ReportState,
+) -> None:
+    result = await _do_create(**_CONFIRMED_KWARGS)
+
+    assert result["success"] is True
+    assert "attack_techniques" not in report_state.vulnerability_reports[0]
+
+
+def test_update_replaces_attack_techniques(report_state: ReportState) -> None:
+    _seed_weak_report(report_state)
+
+    result = _do_update(
+        report_id="vuln-0009",
+        update_reason="The chained PoC read cloud credentials.",
+        fields={"attack_techniques": ["T1190", "T1552.005"]},
+    )
+
+    assert result["success"] is True
+    assert report_state.vulnerability_reports[0]["attack_techniques"] == ["T1190", "T1552.005"]
+
+
+def test_update_rejects_revoked_attack_technique(report_state: ReportState) -> None:
+    _seed_weak_report(report_state)
+
+    result = _do_update(
+        report_id="vuln-0009",
+        update_reason="Tag the technique.",
+        fields={"attack_techniques": ["T1086"]},
+    )
+
+    assert result["success"] is False
+    assert "attack_techniques" not in report_state.vulnerability_reports[0]

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from agents import RunContextWrapper, function_tool
 
+from strix.report.attack import normalize_attack_techniques
 from strix.tools.nullish import clean_optional
 from strix.tools.proxy.tools import existing_request_ids
 
@@ -462,6 +463,14 @@ def _collect_update_changes(  # noqa: PLR0912, PLR0915
     if cwe:
         changes["cwe"] = cwe
 
+    if fields.get("attack_techniques") is not None:
+        attack_techniques, attack_errors = normalize_attack_techniques(
+            fields.get("attack_techniques")
+        )
+        errors.extend(attack_errors)
+        if not attack_errors:
+            changes["attack_techniques"] = attack_techniques
+
     raw_http_exchange_ids = fields.get("http_exchange_ids")
     http_exchange_ids, http_exchange_errors = _normalize_http_exchange_ids(raw_http_exchange_ids)
     errors.extend(http_exchange_errors)
@@ -803,6 +812,7 @@ async def _do_create(
     confidence_rationale: str | None = None,
     fix_verification: str | None = None,
     fix_pr_body: str | None = None,
+    attack_techniques: list[str] | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
 ) -> dict[str, Any]:
@@ -845,6 +855,8 @@ async def _do_create(
     errors.extend(_validate_fix_verification(parsed_locations, fix_verification))
     cve, cwe, identifier_errors = _validate_identifiers(cve, cwe)
     errors.extend(identifier_errors)
+    normalized_attack_techniques, attack_errors = normalize_attack_techniques(attack_techniques)
+    errors.extend(attack_errors)
     normalized_http_exchange_ids, http_exchange_errors = _normalize_http_exchange_ids(
         http_exchange_ids
     )
@@ -907,6 +919,7 @@ async def _do_create(
             "method": method,
             "cve": cve,
             "cwe": cwe,
+            "attack_techniques": normalized_attack_techniques or None,
             "code_locations": parsed_locations,
             "fix_verification": fix_verification,
             "fix_pr_body": fix_pr_body,
@@ -1000,6 +1013,7 @@ async def create_vulnerability_report(
     method: str | None = None,
     cve: str | None = None,
     cwe: str | None = None,
+    attack_techniques: list[str] | None = None,
     code_locations: list[dict[str, Any]] | None = None,
     http_exchange_ids: list[str] | None = None,
     confidence_rationale: str | None = None,
@@ -1296,6 +1310,12 @@ async def create_vulnerability_report(
         method: HTTP method when relevant.
         cve: ``CVE-YYYY-NNNNN`` if certain, else omit.
         cwe: ``CWE-NNN`` (most specific child) if certain, else omit.
+        attack_techniques: MITRE ATT&CK Enterprise technique ids (e.g.
+            ``["T1190", "T1552.001"]``) for what the PoC actually did:
+            the entry point it exploited and each step it demonstrated
+            after that (credentials it read, commands it ran, data it
+            took). Tag only techniques the evidence shows; leave out
+            techniques the finding merely makes possible. Omit when unsure.
         code_locations: White-box findings — list of location objects.
         http_exchange_ids: Proxy request IDs that prove this finding.
             Copy these IDs from ``list_requests`` or ``view_request``.
@@ -1450,6 +1470,7 @@ async def create_vulnerability_report(
         method=method,
         cve=cve,
         cwe=cwe,
+        attack_techniques=attack_techniques,
         code_locations=code_locations,
         http_exchange_ids=http_exchange_ids,
         fix_verification=fix_verification,
@@ -1485,6 +1506,7 @@ async def update_vulnerability_report(
     method: str | None = None,
     cve: str | None = None,
     cwe: str | None = None,
+    attack_techniques: list[str] | None = None,
     code_locations: list[dict[str, Any]] | None = None,
     http_exchange_ids: list[str] | None = None,
     fix_verification: str | None = None,
@@ -1558,6 +1580,8 @@ async def update_vulnerability_report(
         method: Replacement HTTP method.
         cve: Replacement CVE id.
         cwe: Replacement CWE id.
+        attack_techniques: Replacement MITRE ATT&CK technique ids. Same
+            rule as on create: only what the evidence demonstrates.
         code_locations: Replacement code locations.
         http_exchange_ids: Replacement proxy request ids. Pass an empty
             list to remove all linked exchanges.
@@ -1604,6 +1628,7 @@ async def update_vulnerability_report(
         "method": method,
         "cve": cve,
         "cwe": cwe,
+        "attack_techniques": attack_techniques,
         "code_locations": code_locations,
         "http_exchange_ids": http_exchange_ids,
         "fix_verification": fix_verification,
@@ -1905,6 +1930,7 @@ async def _do_create_dependency(  # noqa: PLR0912, PLR0915
     fix_verification: str | None = None,
     contextual_cvss_breakdown: dict[str, str] | None = None,
     contextual_cvss_reasoning: str | None = None,
+    attack_techniques: list[str] | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
 ) -> dict[str, Any]:
@@ -1934,6 +1960,9 @@ async def _do_create_dependency(  # noqa: PLR0912, PLR0915
         cwe_err = _validate_cwe(cwe)
         if cwe_err:
             errors.append(cwe_err)
+
+    normalized_attack_techniques, attack_errors = normalize_attack_techniques(attack_techniques)
+    errors.extend(attack_errors)
 
     fix_effort = (fix_effort or "").strip().lower()
     if fix_effort not in _VALID_FIX_EFFORT:
@@ -2061,6 +2090,7 @@ async def _do_create_dependency(  # noqa: PLR0912, PLR0915
             cvss=cvss_score if advisory_cvss is not None else None,
             cve=parsed_cve,
             cwe=cwe,
+            attack_techniques=normalized_attack_techniques or None,
             code_locations=parsed_locations,
             fix_verification=fix_verification,
             finding_class="dependency_cve",
@@ -2121,6 +2151,7 @@ async def create_dependency_report(
     fix_verification: str | None = None,
     contextual_cvss_breakdown: dict[str, str] | None = None,
     contextual_cvss_reasoning: str | None = None,
+    attack_techniques: list[str] | None = None,
 ) -> str:
     """File a known-CVE dependency (SCA) finding — one report per CVE x package.
 
@@ -2185,6 +2216,10 @@ async def create_dependency_report(
         package_ecosystem: e.g. ``npm`` / ``pypi`` / ``maven`` / ``go``.
         fixed_version: First non-vulnerable version, if known.
         cwe: ``CWE-NNN`` (most specific) if certain, else omit.
+        attack_techniques: MITRE ATT&CK Enterprise technique ids the
+            reachability evidence demonstrates (e.g. ``["T1190"]`` for a
+            proven exploitable path from a public endpoint). Omit when the
+            evidence does not show one.
         advisory_cvss: **Required.** Published advisory base score
             (0.0-10.0) — read it off the advisory (trivy CVSS / NVD / GHSA).
             It is the published reference the finding is rated against and
@@ -2310,6 +2345,7 @@ async def create_dependency_report(
         fix_verification=fix_verification,
         contextual_cvss_breakdown=contextual_cvss_breakdown,
         contextual_cvss_reasoning=contextual_cvss_reasoning,
+        attack_techniques=attack_techniques,
         agent_id=agent_id,
         agent_name=agent_name,
     )
@@ -2338,6 +2374,7 @@ _REPORT_SUMMARY_FIELDS = (
     "finding_class",
     "cve",
     "cwe",
+    "attack_techniques",
     "target",
     "endpoint",
     "method",
