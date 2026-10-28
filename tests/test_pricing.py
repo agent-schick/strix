@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import litellm
@@ -7,6 +8,10 @@ from agents.usage import Usage
 
 from strix.report.pricing import resolve_litellm_model
 from strix.report.usage import LLMUsageLedger
+
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def test_resolves_common_bare_model_names() -> None:
@@ -58,6 +63,117 @@ def test_ledger_prefers_observed_cost_over_estimate() -> None:
     ledger.record_observed_cost(0.17)
 
     assert ledger.total_cost == 0.17
+
+
+def test_unpriced_model_without_manual_rates_costs_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "STRIX_LLM_INPUT_COST_PER_MTOK",
+        "STRIX_LLM_OUTPUT_COST_PER_MTOK",
+        "STRIX_LLM_CACHED_INPUT_COST_PER_MTOK",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    usage = Usage()
+    usage.requests = 1
+    usage.input_tokens = 1000
+    usage.output_tokens = 200
+    usage.total_tokens = 1200
+    ledger = LLMUsageLedger()
+
+    ledger.record(agent_id="a", usage=usage, model="gateway/unpriced-model")
+
+    assert ledger.total_cost == 0.0
+
+
+def test_manual_rates_price_usage_and_override_observed_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("STRIX_LLM_INPUT_COST_PER_MTOK", "2")
+    monkeypatch.setenv("STRIX_LLM_OUTPUT_COST_PER_MTOK", "8")
+    monkeypatch.delenv("STRIX_LLM_CACHED_INPUT_COST_PER_MTOK", raising=False)
+    usage = Usage()
+    usage.requests = 1
+    usage.input_tokens = 1000
+    usage.output_tokens = 200
+    usage.total_tokens = 1200
+    ledger = LLMUsageLedger()
+
+    ledger.record(agent_id="a", usage=usage, model="gateway/unpriced-model")
+    ledger.record_observed_cost(0.17)
+
+    assert ledger.total_cost == 0.0036
+    assert ledger.to_record()["agents"][0]["cost"] == 0.0036
+
+
+def test_cached_tokens_fall_back_to_input_rate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STRIX_LLM_INPUT_COST_PER_MTOK", "5")
+    monkeypatch.setenv("STRIX_LLM_OUTPUT_COST_PER_MTOK", "7")
+    monkeypatch.delenv("STRIX_LLM_CACHED_INPUT_COST_PER_MTOK", raising=False)
+    usage = Usage()
+    usage.requests = 1
+    usage.input_tokens = 10
+    usage.output_tokens = 1
+    usage.total_tokens = 11
+    usage.input_tokens_details.cached_tokens = 2
+    ledger = LLMUsageLedger()
+
+    ledger.record(agent_id="a", usage=usage, model="gateway/unpriced-model")
+
+    assert ledger.total_cost == 0.000057
+
+
+def test_hydrated_usage_uses_configured_rates_not_persisted_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("STRIX_LLM_INPUT_COST_PER_MTOK", "2")
+    monkeypatch.setenv("STRIX_LLM_OUTPUT_COST_PER_MTOK", "8")
+    usage = Usage()
+    usage.requests = 1
+    usage.input_tokens = 1000
+    usage.output_tokens = 200
+    usage.total_tokens = 1200
+    original = LLMUsageLedger()
+    original.record(agent_id="a", usage=usage, model="gateway/unpriced-model")
+    persisted = original.to_record()
+    persisted["cost"] = 42.0
+    hydrated = LLMUsageLedger()
+
+    hydrated.hydrate(persisted)
+
+    assert hydrated.total_cost == 0.0036
+
+
+def test_invalid_manual_rate_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("STRIX_LLM_INPUT_COST_PER_MTOK", "invalid")
+    monkeypatch.setenv("STRIX_LLM_OUTPUT_COST_PER_MTOK", "10")
+    monkeypatch.delenv("STRIX_LLM_CACHED_INPUT_COST_PER_MTOK", raising=False)
+    usage = Usage()
+    usage.requests = 1
+    usage.input_tokens = 1000
+    usage.output_tokens = 200
+    usage.total_tokens = 1200
+    ledger = LLMUsageLedger()
+
+    ledger.record(agent_id="a", usage=usage, model="gateway/unpriced-model")
+
+    assert ledger.total_cost == 0.002
+    assert "Ignoring invalid STRIX_LLM_INPUT_COST_PER_MTOK" in caplog.text
+
+
+def test_zero_cost_overrides_manual_rates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STRIX_LLM_INPUT_COST_PER_MTOK", "10")
+    usage = Usage()
+    usage.requests = 1
+    usage.input_tokens = 1000
+    usage.total_tokens = 1000
+    ledger = LLMUsageLedger()
+    ledger.zero_cost = True
+
+    ledger.record(agent_id="a", usage=usage, model="gateway/unpriced-model")
+
+    assert ledger.total_cost == 0.0
 
 
 def test_hydrated_estimate_continues_accumulating_new_estimates() -> None:

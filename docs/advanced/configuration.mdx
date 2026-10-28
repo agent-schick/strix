@@ -19,6 +19,18 @@ Configure Strix using environment variables or a config file.
   Custom API base URL. Also accepts `OPENAI_API_BASE`, `LITELLM_BASE_URL`, or `OLLAMA_API_BASE`.
 </ParamField>
 
+<ParamField path="STRIX_LLM_INPUT_COST_PER_MTOK" type="number">
+  Price per 1M input tokens in USD. When set, Strix computes cost and `--max-budget` from these prices instead of the provider-reported or LiteLLM cost. Use it for gateway or self-hosted model ids that LiteLLM can't price.
+</ParamField>
+
+<ParamField path="STRIX_LLM_OUTPUT_COST_PER_MTOK" type="number">
+  Price per 1M output tokens in USD. When set, Strix computes cost and `--max-budget` from these prices instead of the provider-reported or LiteLLM cost. Use it for gateway or self-hosted model ids that LiteLLM can't price.
+</ParamField>
+
+<ParamField path="STRIX_LLM_CACHED_INPUT_COST_PER_MTOK" type="number">
+  Price per 1M cached input tokens in USD. When set, Strix computes cost and `--max-budget` from these prices instead of the provider-reported or LiteLLM cost. If unset, cached tokens use the input-token price.
+</ParamField>
+
 <ParamField path="STRIX_API_TYPE" type="string">
   Select the OpenAI API path for the model: `responses` or `chat_completions`.
   By default the model decides: Responses when LiteLLM's model catalog lists
