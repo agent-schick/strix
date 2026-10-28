@@ -132,6 +132,8 @@ _DETAIL_PRIORITY_KEYS = (
     "cwe",
     "attack_techniques",
     "attack_source",
+    "atlas_techniques",
+    "atlas_source",
     "cvss",
     "filed_at",
     "target",

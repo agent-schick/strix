@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from agents import RunContextWrapper, function_tool
 
+from strix.report.atlas import normalize_atlas_techniques
 from strix.report.attack import normalize_attack_techniques
 from strix.tools.nullish import clean_optional
 from strix.tools.proxy.tools import existing_request_ids
@@ -471,6 +472,12 @@ def _collect_update_changes(  # noqa: PLR0912, PLR0915
         if not attack_errors:
             changes["attack_techniques"] = attack_techniques
 
+    if fields.get("atlas_techniques") is not None:
+        atlas_techniques, atlas_errors = normalize_atlas_techniques(fields.get("atlas_techniques"))
+        errors.extend(atlas_errors)
+        if not atlas_errors:
+            changes["atlas_techniques"] = atlas_techniques
+
     raw_http_exchange_ids = fields.get("http_exchange_ids")
     http_exchange_ids, http_exchange_errors = _normalize_http_exchange_ids(raw_http_exchange_ids)
     errors.extend(http_exchange_errors)
@@ -813,6 +820,7 @@ async def _do_create(
     fix_verification: str | None = None,
     fix_pr_body: str | None = None,
     attack_techniques: list[str] | None = None,
+    atlas_techniques: list[str] | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
 ) -> dict[str, Any]:
@@ -857,6 +865,8 @@ async def _do_create(
     errors.extend(identifier_errors)
     normalized_attack_techniques, attack_errors = normalize_attack_techniques(attack_techniques)
     errors.extend(attack_errors)
+    normalized_atlas_techniques, atlas_errors = normalize_atlas_techniques(atlas_techniques)
+    errors.extend(atlas_errors)
     normalized_http_exchange_ids, http_exchange_errors = _normalize_http_exchange_ids(
         http_exchange_ids
     )
@@ -920,6 +930,7 @@ async def _do_create(
             "cve": cve,
             "cwe": cwe,
             "attack_techniques": normalized_attack_techniques or None,
+            "atlas_techniques": normalized_atlas_techniques or None,
             "code_locations": parsed_locations,
             "fix_verification": fix_verification,
             "fix_pr_body": fix_pr_body,
@@ -1014,6 +1025,7 @@ async def create_vulnerability_report(
     cve: str | None = None,
     cwe: str | None = None,
     attack_techniques: list[str] | None = None,
+    atlas_techniques: list[str] | None = None,
     code_locations: list[dict[str, Any]] | None = None,
     http_exchange_ids: list[str] | None = None,
     confidence_rationale: str | None = None,
@@ -1316,6 +1328,12 @@ async def create_vulnerability_report(
             after that (credentials it read, commands it ran, data it
             took). Tag only techniques the evidence shows; leave out
             techniques the finding merely makes possible. Omit when unsure.
+        atlas_techniques: MITRE ATLAS technique ids (e.g. ``["AML.T0051"]``)
+            when the target is an AI system (LLM app, agent, RAG pipeline)
+            and the PoC showed the attack, for example prompt injection
+            (AML.T0051), jailbreak (AML.T0054), system prompt extraction
+            (AML.T0056) or data leakage (AML.T0057). Same rule: only what the
+            evidence shows. Omit for other findings.
         code_locations: White-box findings — list of location objects.
         http_exchange_ids: Proxy request IDs that prove this finding.
             Copy these IDs from ``list_requests`` or ``view_request``.
@@ -1471,6 +1489,7 @@ async def create_vulnerability_report(
         cve=cve,
         cwe=cwe,
         attack_techniques=attack_techniques,
+        atlas_techniques=atlas_techniques,
         code_locations=code_locations,
         http_exchange_ids=http_exchange_ids,
         fix_verification=fix_verification,
@@ -1507,6 +1526,7 @@ async def update_vulnerability_report(
     cve: str | None = None,
     cwe: str | None = None,
     attack_techniques: list[str] | None = None,
+    atlas_techniques: list[str] | None = None,
     code_locations: list[dict[str, Any]] | None = None,
     http_exchange_ids: list[str] | None = None,
     fix_verification: str | None = None,
@@ -1582,6 +1602,7 @@ async def update_vulnerability_report(
         cwe: Replacement CWE id.
         attack_techniques: Replacement MITRE ATT&CK technique ids. Same
             rule as on create: only what the evidence demonstrates.
+        atlas_techniques: Replacement MITRE ATLAS technique ids. Same rule.
         code_locations: Replacement code locations.
         http_exchange_ids: Replacement proxy request ids. Pass an empty
             list to remove all linked exchanges.
@@ -1629,6 +1650,7 @@ async def update_vulnerability_report(
         "cve": cve,
         "cwe": cwe,
         "attack_techniques": attack_techniques,
+        "atlas_techniques": atlas_techniques,
         "code_locations": code_locations,
         "http_exchange_ids": http_exchange_ids,
         "fix_verification": fix_verification,

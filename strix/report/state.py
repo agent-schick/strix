@@ -92,6 +92,7 @@ UPDATABLE_REPORT_FIELDS = frozenset(
         "cve",
         "cwe",
         "attack_techniques",
+        "atlas_techniques",
         "code_locations",
         "http_exchange_ids",
         "fix_verification",
@@ -355,6 +356,7 @@ class ReportState:
         cve: str | None = None,
         cwe: str | None = None,
         attack_techniques: list[str] | None = None,
+        atlas_techniques: list[str] | None = None,
         code_locations: list[dict[str, Any]] | None = None,
         http_exchange_ids: list[str] | None = None,
         fix_verification: str | None = None,
@@ -415,6 +417,8 @@ class ReportState:
             report["cwe"] = cwe.strip()
         if attack_techniques:
             report["attack_techniques"] = list(attack_techniques)
+        if atlas_techniques:
+            report["atlas_techniques"] = list(atlas_techniques)
         if code_locations:
             report["code_locations"] = code_locations
         if http_exchange_ids:

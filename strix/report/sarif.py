@@ -544,6 +544,7 @@ def _result_properties(
         "cve",
         "cwe",
         "attack_techniques",
+        "atlas_techniques",
         "impact",
         "technical_analysis",
         "remediation_steps",
