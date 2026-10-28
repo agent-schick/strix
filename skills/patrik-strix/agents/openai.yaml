@@ -1,0 +1,4 @@
+interface:
+  display_name: "Náš Strix"
+  short_description: "Interní pentest Strixem s důkazy a retestem"
+  default_prompt: "Použij $patrik-strix pro test v rozsahu navázaného issue a dolož nálezy i neprověřené části."
