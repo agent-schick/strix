@@ -3,51 +3,29 @@
 from __future__ import annotations
 
 import logging
-import math
-import os
 from typing import Any
 
 from agents.usage import Usage, deserialize_usage, serialize_usage
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
+from strix.config.loader import load_settings
 from strix.report.pricing import resolve_litellm_model
 
 
 logger = logging.getLogger(__name__)
 
-_PRICE_ENV = (
-    "STRIX_LLM_INPUT_COST_PER_MTOK",
-    "STRIX_LLM_OUTPUT_COST_PER_MTOK",
-    "STRIX_LLM_CACHED_INPUT_COST_PER_MTOK",
-)
-_warned_invalid_prices: set[str] = set()
+Prices = tuple[float | None, float | None, float | None]
 
 
-def _configured_prices() -> tuple[float | None, float | None, float | None]:
-    prices: list[float | None] = []
-    for name in _PRICE_ENV:
-        raw = os.environ.get(name)
-        if raw is None or raw == "":
-            prices.append(None)
-            continue
-        try:
-            price = float(raw)
-        except ValueError:
-            price = math.nan
-        if not math.isfinite(price) or price < 0:
-            if name not in _warned_invalid_prices:
-                logger.warning("Ignoring invalid %s; expected a finite non-negative rate", name)
-                _warned_invalid_prices.add(name)
-            prices.append(None)
-            continue
-        prices.append(price)
-    return prices[0], prices[1], prices[2]
+def _configured_prices() -> tuple[str | None, Prices | None]:
+    llm = load_settings().llm
+    prices = (llm.input_cost_per_mtok, llm.output_cost_per_mtok, llm.cached_input_cost_per_mtok)
+    if all(price is None for price in prices):
+        return None, None
+    return (llm.model or "").strip() or None, prices
 
 
-def _configured_usage_cost(
-    usage: Usage,
-    prices: tuple[float | None, float | None, float | None],
-) -> float:
+def _configured_usage_cost(usage: Usage, prices: Prices) -> float:
     input_rate, output_rate, cached_rate = prices
     input_tokens = max(0, _int_or_zero(getattr(usage, "input_tokens", 0)))
     cached_details = getattr(usage, "input_tokens_details", None)
@@ -86,6 +64,7 @@ class LLMUsageLedger:
         self._total_usage = Usage()
         self._agent_usage: dict[str, Usage] = {}
         self._agent_metadata: dict[str, dict[str, str]] = {}
+        self._agent_estimated_cost: dict[str, float] = {}
         self._observed_cost = 0.0
         self._estimated_cost = 0.0
         self._has_observed_cost = False
@@ -122,6 +101,9 @@ class LLMUsageLedger:
             estimated = _estimate_litellm_cost(usage, model)
             if estimated:
                 self._estimated_cost += estimated
+                self._agent_estimated_cost[normalized_agent_id] = (
+                    self._agent_estimated_cost.get(normalized_agent_id, 0.0) + estimated
+                )
 
         return True
 
@@ -163,22 +145,22 @@ class LLMUsageLedger:
     def total_cost(self) -> float:
         if self.zero_cost:
             return 0.0
-        prices = _configured_prices()
-        if any(price is not None for price in prices):
-            return _configured_usage_cost(self._total_usage, prices)
+        model, prices = _configured_prices()
+        if prices is not None:
+            return _round_cost(
+                sum(self._configured_agent_cost(aid, model, prices) for aid in self._agent_usage)
+            )
         return _round_cost(self._observed_cost if self._has_observed_cost else self._estimated_cost)
+
+    def _configured_agent_cost(self, agent_id: str, model: str | None, prices: Prices) -> float:
+        if self._agent_metadata.get(agent_id, {}).get("model") == model:
+            return _configured_usage_cost(self._agent_usage[agent_id], prices)
+        return self._agent_estimated_cost.get(agent_id, 0.0)
 
     def to_record(self) -> dict[str, Any]:
         record = serialize_usage(self._total_usage)
-        prices = _configured_prices()
-        configured = any(price is not None for price in prices)
-        total_cost = (
-            0.0
-            if self.zero_cost
-            else _configured_usage_cost(self._total_usage, prices)
-            if configured
-            else self.total_cost
-        )
+        model, prices = _configured_prices()
+        total_cost = self.total_cost
         record["cost"] = total_cost
         record["providers"] = {name: tally.model_dump() for name, tally in self._providers.items()}
         record["agents"] = []
@@ -189,8 +171,8 @@ class LLMUsageLedger:
             usage = self._agent_usage[agent_id]
             metadata = self._agent_metadata.get(agent_id, {})
             agent_cost = (
-                _configured_usage_cost(usage, prices)
-                if configured and not self.zero_cost
+                self._configured_agent_cost(agent_id, model, prices)
+                if prices is not None and not self.zero_cost
                 else total_cost * (agent_tokens[agent_id] / total_tokens)
                 if total_tokens
                 else 0.0
@@ -213,6 +195,7 @@ class LLMUsageLedger:
         self._total_usage = Usage()
         self._agent_usage.clear()
         self._agent_metadata.clear()
+        self._agent_estimated_cost.clear()
         self._observed_cost = 0.0
         self._estimated_cost = 0.0
         self._has_observed_cost = False
@@ -248,6 +231,7 @@ class LLMUsageLedger:
                 logger.exception("Failed to hydrate llm_usage for agent %s", agent_id)
                 self._agent_usage[agent_id] = Usage()
 
+            self._agent_estimated_cost[agent_id] = _float_or_zero(raw_agent.get("cost"))
             metadata: dict[str, str] = {}
             agent_name = raw_agent.get("agent_name")
             model = raw_agent.get("model")
